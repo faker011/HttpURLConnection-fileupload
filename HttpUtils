@@ -1,0 +1,98 @@
+public class HttpUtil {
+
+    //线程池
+    private static ExecutorService executor;
+    private static Handler mHandler;
+
+    static {
+        executor = Executors.newFixedThreadPool(5);
+        mHandler = new Handler();
+    }
+public static void uploadFile(final String actionUrl, final File file, final StringCallback callback)  {
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                String BOUNDARY = "----" + java.util.UUID.randomUUID().toString();   //利用系统工具类生成界限符
+                String PREFIX = "--", LINEND = "\r\n";
+                String MULTIPART_FROM_DATA = "multipart/form-data";
+                String CHARSET = "UTF-8";
+                HttpURLConnection conn = null;
+                DataOutputStream outStream = null;
+                try {
+                    URL uri = new URL(actionUrl);
+                    conn = (HttpURLConnection) uri.openConnection();
+                    conn.setReadTimeout(5 * 1000); // 缓存的最长时间
+                    conn.setDoInput(true);// 允许输入
+                    conn.setDoOutput(true);// 允许输出
+                    conn.setUseCaches(false); // 不允许使用缓存
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("connection", "keep-alive");
+                    conn.setRequestProperty("Charsert", "UTF-8");
+                    conn.setRequestProperty("Content-Type", MULTIPART_FROM_DATA + ";boundary=" + BOUNDARY);
+
+                    outStream = new DataOutputStream(conn.getOutputStream());
+                    // outStream.write(sb.toString().getBytes());
+                    InputStream in = null;
+                    // 发送文件数据
+                    if (file != null) {
+                        StringBuilder sb1 = new StringBuilder();
+                        sb1.append(PREFIX);
+                        sb1.append(BOUNDARY);
+                        sb1.append(LINEND);
+                        // name是post中传参的键 filename是文件的名称
+                        sb1.append("Content-Disposition: form-data; name=\"file\"; filename=\"" + file.getName() + "\"" + LINEND);
+                        sb1.append("Content-Type: image/png" + LINEND);
+                        sb1.append(LINEND);
+                        outStream.write(sb1.toString().getBytes());
+                        Log.d("file", sb1.toString());
+                        InputStream is = new FileInputStream(file);
+                        byte[] buffer = new byte[1024];
+                        int len = 0;
+                        while ((len = is.read(buffer)) != -1) {
+                            outStream.write(buffer, 0, len);
+                        }
+
+                        is.close();
+                        outStream.write(LINEND.getBytes());
+
+                        // 请求结束标志
+                        byte[] end_data = (PREFIX + BOUNDARY + PREFIX + LINEND).getBytes();
+                        outStream.write(end_data);
+                        outStream.flush();
+                        // 得到响应码
+                        int res = conn.getResponseCode();
+                        int responseCode = conn.getResponseCode();
+                        if (responseCode == 200) {
+                            InputStream inputStream = conn.getInputStream();
+                            String result = inputStream2String(inputStream);
+                            if (result != null && callback != null) {
+                                postSuccessString(callback, result);
+                            }
+                        } else {
+                            if (callback != null) {
+                                postFailed(callback, responseCode, new Exception("请求数据失败：" + responseCode));
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    if (callback != null) {
+                        postFailed(callback, 0, ex);
+                    }
+                } finally {
+                    if (conn != null) {
+                        conn.disconnect();
+                    }
+                    if (outStream != null) {
+                        try {
+                            outStream.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+        });
+
+        // return in.toString();
+    }
+}
